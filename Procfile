@@ -1,0 +1,1 @@
+worker: python counting_bot.py
