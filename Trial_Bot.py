@@ -1,31 +1,16 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+bot = commands.Bot(intents=discord.Intents.default())
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Definizione del comando slash
-class MyClient(discord.Client):
-    def __init__(self, *, intents):
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
-
-client = MyClient(intents=intents)
-
-@client.event
+@bot.event
 async def on_ready():
-    await client.tree.sync()  # sincronizza i comandi slash
-    print(f"Connesso come {client.user}")
+    print(f"Connesso come {bot.user}")
 
-# Definizione comando slash
-@client.tree.command(name="ciao", description="Risponde che funziona")
-async def ciao(interaction: discord.Interaction):
-    await interaction.response.send_message("Ciao! Funziono 🎉")
+@bot.slash_command(name="ciao")
+async def ciao(ctx):
+    await ctx.respond("Ciao! Funziono 🎉")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-client.run(TOKEN)
+bot.run(TOKEN)
