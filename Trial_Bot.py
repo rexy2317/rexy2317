@@ -2,7 +2,7 @@ import os
 import discord
 from discord.ext import commands
 
-bot = commands.Bot(intents=discord.Intents.default())
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
 
 @bot.event
 async def on_ready():
@@ -15,3 +15,4 @@ async def ciao(ctx):
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 bot.run(TOKEN)
+
