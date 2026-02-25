@@ -11,6 +11,8 @@ import math
 TOKEN = os.getenv("TOKEN")
 if TOKEN is None:
     raise ValueError("Token non trovato nelle variabili ambiente!")
+    
+DATA_FILE = "/mnt/data/counting_data.json"
 
 # ================= CARICAMENTO DATI =================
 if os.path.exists(DATA_FILE):
@@ -220,4 +222,5 @@ async def reset(interaction: discord.Interaction):
 
 # ================= AVVIO =================
 bot.run(TOKEN)
+
 
