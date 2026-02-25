@@ -127,9 +127,16 @@ async def on_message(message):
         last_user[guild_id] = message.author.id  # aggiorna solo se valido
 
         # record
+        new_record = False
         if result > data["record"]:
             data["record"] = result
+            new_record = True
+
+        # reazione sempre per nuovo record
+        if new_record:
             await message.add_reaction("🏆")
+
+            # messaggio solo se multiplo di 10
             if result % 10 == 0:
                 await message.channel.send(f"🏆 Nuovo record: **{result}**!")
 
@@ -203,3 +210,4 @@ async def reset(interaction: discord.Interaction):
 # ================= AVVIO =================
 
 bot.run(TOKEN)
+
