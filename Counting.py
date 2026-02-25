@@ -8,9 +8,9 @@ import operator
 import math
 
 # ================= CONFIG =================
-TOKEN = "INSERISCI_TOKEN"
-DATA_FILE = "counting_data.json"
-GUILD_ID = 123456789012345678  # <--- sostituisci con l'ID del tuo server
+TOKEN = os.getenv("TOKEN")
+if TOKEN is None:
+    raise ValueError("Token non trovato nelle variabili ambiente!")
 
 # ================= CARICAMENTO DATI =================
 if os.path.exists(DATA_FILE):
@@ -220,3 +220,4 @@ async def reset(interaction: discord.Interaction):
 
 # ================= AVVIO =================
 bot.run(TOKEN)
+
