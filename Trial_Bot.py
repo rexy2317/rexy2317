@@ -25,8 +25,9 @@ async def on_ready():
 # Definizione comando slash
 @client.tree.command(name="ciao", description="Risponde che funziona")
 async def ciao(interaction: discord.Interaction):
-    await interaction.response.send_message("Ciao! Funziono 🎉")
+    await interaction.response.send_message("Ciao Piz")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 client.run(TOKEN)
+
 
