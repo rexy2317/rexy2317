@@ -11,20 +11,17 @@ TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN is None:
     raise ValueError("Token non trovato nelle variabili ambiente!")
 
-# ID DEL TUO SERVER
-GUILD_ID = 1286731492290072738
-
-# File persistente Railway
+# Railway volume persistente
 DATA_FILE = "/mnt/data/counting_data.json"
 
 # ================= CARICAMENTO DATI =================
 if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        try:
+    try:
+        with open(DATA_FILE, "r") as f:
             guild_data = json.load(f)
-        except json.JSONDecodeError:
-            print("⚠️ JSON corrotto! Reset.")
-            guild_data = {}
+    except json.JSONDecodeError:
+        print("⚠️ JSON corrotto, ricreo file.")
+        guild_data = {}
 else:
     guild_data = {}
 
@@ -68,11 +65,11 @@ def eval_expr(expr):
                 raise ValueError
             return operators[type(node.op)](_eval(node.left), _eval(node.right))
         elif isinstance(node, ast.Call):
-            func = node.func.id
-            if func not in allowed_funcs:
+            name = node.func.id
+            if name not in allowed_funcs:
                 raise ValueError
             args = [_eval(a) for a in node.args]
-            return allowed_funcs[func](*args)
+            return allowed_funcs[name](*args)
         raise ValueError
 
     node = ast.parse(expr, mode="eval").body
@@ -81,7 +78,9 @@ def eval_expr(expr):
 # ================= EVENTI =================
 @bot.event
 async def on_ready():
-    print(f"✅ Bot online come {bot.user}")
+    await bot.sync_commands()  # GLOBAL COMMANDS
+    print(f"✅ Online come {bot.user}")
+    print("🌍 Slash commands globali sincronizzati")
 
 @bot.event
 async def on_message(message):
@@ -115,7 +114,7 @@ async def on_message(message):
 
         if last_user.get(guild_id) == message.author.id:
             await message.channel.send(
-                f"❌ {message.author.mention} non puoi contare due volte! Reset."
+                f"❌ {message.author.mention} non puoi contare due volte!"
             )
             data["current"] = 0
             last_user[guild_id] = None
@@ -125,15 +124,9 @@ async def on_message(message):
         data["current"] = result
         last_user[guild_id] = message.author.id
 
-        new_record = False
         if result > data["record"]:
             data["record"] = result
-            new_record = True
-
-        if new_record:
             await message.add_reaction("🏆")
-            if result % 10 == 0:
-                await message.channel.send(f"🏆 Nuovo record: **{result}**!")
 
         await message.add_reaction("✅")
 
@@ -148,15 +141,10 @@ async def on_message(message):
 
     save_data()
 
-# ================= SLASH COMMANDS (PY-CORD) =================
+# ================= SLASH COMMANDS =================
 
-@bot.slash_command(
-    name="setcounting",
-    description="Imposta questo canale come counting",
-    guild_ids=[GUILD_ID]
-)
+@bot.slash_command(name="setcounting", description="Imposta il canale counting")
 async def setcounting(ctx: discord.ApplicationContext):
-
     guild_id = str(ctx.guild.id)
 
     guild_data[guild_id] = {
@@ -168,46 +156,33 @@ async def setcounting(ctx: discord.ApplicationContext):
     save_data()
     await ctx.respond("✅ Canale counting impostato!")
 
-
-@bot.slash_command(
-    name="count",
-    description="Mostra il numero attuale",
-    guild_ids=[GUILD_ID]
-)
+@bot.slash_command(name="count", description="Mostra il numero attuale")
 async def count(ctx: discord.ApplicationContext):
-
-    guild_id = str(ctx.guild.id)
-
-    if guild_id not in guild_data:
-        await ctx.respond("⚠️ Usa prima /setcounting", ephemeral=True)
-        return
-
-    await ctx.respond(f"🔢 Numero attuale: **{guild_data[guild_id]['current']}**")
-
-
-@bot.slash_command(
-    name="record",
-    description="Mostra il record",
-    guild_ids=[GUILD_ID]
-)
-async def record(ctx: discord.ApplicationContext):
-
     guild_id = str(ctx.guild.id)
 
     if guild_id not in guild_data:
         await ctx.respond("⚠️ Counting non configurato.", ephemeral=True)
         return
 
-    await ctx.respond(f"🏆 Record massimo: **{guild_data[guild_id]['record']}**")
+    await ctx.respond(
+        f"🔢 Numero attuale: **{guild_data[guild_id]['current']}**"
+    )
 
+@bot.slash_command(name="record", description="Mostra il record")
+async def record(ctx: discord.ApplicationContext):
+    guild_id = str(ctx.guild.id)
 
-@bot.slash_command(
-    name="reset",
-    description="Resetta il counting",
-    guild_ids=[GUILD_ID]
-)
+    if guild_id not in guild_data:
+        await ctx.respond("⚠️ Counting non configurato.", ephemeral=True)
+        return
+
+    await ctx.respond(
+        f"🏆 Record massimo: **{guild_data[guild_id]['record']}**"
+    )
+
+@bot.slash_command(name="reset", description="Resetta il counting")
+@commands.has_permissions(administrator=True)
 async def reset(ctx: discord.ApplicationContext):
-
     guild_id = str(ctx.guild.id)
 
     guild_data[guild_id]["current"] = 0
