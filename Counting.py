@@ -11,7 +11,8 @@ import math
 TOKEN = os.getenv("TOKEN")
 if TOKEN is None:
     raise ValueError("Token non trovato nelle variabili ambiente!")
-    
+
+# percorso JSON su volume persistente di Railway
 DATA_FILE = "/mnt/data/counting_data.json"
 
 # ================= CARICAMENTO DATI =================
@@ -133,7 +134,7 @@ async def on_message(message):
             data["record"] = result
             new_record = True
 
-        # reazione sempre per nuovo record
+        # reazioni
         if new_record:
             await message.add_reaction("🏆")
             if result % 10 == 0:
@@ -153,17 +154,16 @@ async def on_message(message):
     save_data()
     await bot.process_commands(message)
 
-# ================= SLASH COMMANDS =================
+# ================= SLASH COMMANDS (GLOBALI) =================
+# NON serve più guild=..., comandi globali
 @bot.tree.command(
     name="setcounting",
-    description="Imposta questo canale come counting",
-    guild=discord.Object(id=GUILD_ID)
+    description="Imposta questo canale come counting"
 )
 @app_commands.checks.has_permissions(administrator=True)
 async def setcounting(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
 
-    # crea o aggiorna la voce del server
     guild_data[guild_id] = {
         "current": guild_data.get(guild_id, {}).get("current", 0),
         "record": guild_data.get(guild_id, {}).get("record", 0),
@@ -175,8 +175,7 @@ async def setcounting(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="count",
-    description="Mostra il numero attuale",
-    guild=discord.Object(id=GUILD_ID)
+    description="Mostra il numero attuale"
 )
 async def count(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
@@ -192,8 +191,7 @@ async def count(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="record",
-    description="Mostra il record del server",
-    guild=discord.Object(id=GUILD_ID)
+    description="Mostra il record del server"
 )
 async def record(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
@@ -209,8 +207,7 @@ async def record(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="reset",
-    description="Resetta il counting",
-    guild=discord.Object(id=GUILD_ID)
+    description="Resetta il counting"
 )
 @app_commands.checks.has_permissions(administrator=True)
 async def reset(interaction: discord.Interaction):
@@ -222,5 +219,3 @@ async def reset(interaction: discord.Interaction):
 
 # ================= AVVIO =================
 bot.run(TOKEN)
-
-
