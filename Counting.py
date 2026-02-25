@@ -8,25 +8,28 @@ import operator
 import math
 
 # ================= CONFIG =================
-TOKEN = os.getenv("TOKEN")
-if TOKEN is None:
-    raise ValueError("Token non trovato nelle variabili ambiente!")
+TOKEN = "INSERISCI_TOKEN"
 DATA_FILE = "counting_data.json"
+GUILD_ID = 123456789012345678  # <--- sostituisci con l'ID del tuo server
 
 # ================= CARICAMENTO DATI =================
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
-        guild_data = json.load(f)
+        try:
+            guild_data = json.load(f)
+        except json.JSONDecodeError:
+            print("⚠️ JSON corrotto! Inizializzo vuoto.")
+            guild_data = {}
 else:
     guild_data = {}
 
 last_user = {}  # salva ultimo utente per ogni server
 
-
 def save_data():
-    with open(DATA_FILE, "w") as f:
+    tmp_file = DATA_FILE + ".tmp"
+    with open(tmp_file, "w") as f:
         json.dump(guild_data, f, indent=4)
-
+    os.replace(tmp_file, DATA_FILE)
 
 # ================= BOT =================
 intents = discord.Intents.default()
@@ -50,21 +53,15 @@ allowed_funcs = {
     "pow": math.pow,
 }
 
-
 def eval_expr(expr):
-    """
-    Valuta in sicurezza espressioni con operatori e funzioni matematiche.
-    Se non è valido, genera eccezione.
-    """
-
     def _eval(node):
-        if isinstance(node, ast.Num):  # numero semplice
+        if isinstance(node, ast.Num):
             return node.n
-        elif isinstance(node, ast.BinOp):  # operazioni binarie
+        elif isinstance(node, ast.BinOp):
             if type(node.op) not in operators:
                 raise ValueError("Operatore non permesso")
             return operators[type(node.op)](_eval(node.left), _eval(node.right))
-        elif isinstance(node, ast.Call):  # funzione tipo sqrt, log...
+        elif isinstance(node, ast.Call):
             func_name = node.func.id
             if func_name not in allowed_funcs:
                 raise ValueError("Funzione non permessa")
@@ -72,17 +69,15 @@ def eval_expr(expr):
             return allowed_funcs[func_name](*args)
         else:
             raise ValueError("Espressione non valida")
-
+    
     node = ast.parse(expr, mode="eval").body
     return _eval(node)
-
 
 # ================= EVENTI =================
 @bot.event
 async def on_ready():
     await bot.tree.sync()
     print(f"✅ Bot online come {bot.user}")
-
 
 @bot.event
 async def on_message(message):
@@ -91,29 +86,33 @@ async def on_message(message):
 
     guild_id = str(message.guild.id)
 
-    # server non configurato
+    # se server nuovo, inizializza i dati
     if guild_id not in guild_data:
-        return
+        guild_data[guild_id] = {
+            "current": 0,
+            "record": 0,
+            "channel": None
+        }
+        save_data()
 
     data = guild_data[guild_id]
 
-    # controlla canale counting
-    if message.channel.id != data["channel"]:
+    # se il canale non è ancora impostato, ignoriamo
+    if not data["channel"] or message.channel.id != data["channel"]:
         return
 
     # prova a calcolare numero/calcolo
     try:
         result = eval_expr(message.content.replace(" ", ""))
-        result = int(result)  # converte solo se è numero valido
+        result = int(result)
     except Exception:
-        # messaggio non valido → ignoriamo completamente
-        return
+        return  # messaggio non valido → ignorato
 
     expected = data["current"] + 1
 
     # ===== NUMERO CORRETTO =====
     if result == expected:
-        # blocco doppio turno: solo ora aggiorniamo last_user
+        # blocco doppio turno
         if last_user.get(guild_id) == message.author.id:
             await message.channel.send(
                 f"❌ {message.author.mention} non puoi contare due volte! Reset."
@@ -124,9 +123,9 @@ async def on_message(message):
             return
 
         data["current"] = result
-        last_user[guild_id] = message.author.id  # aggiorna solo se valido
+        last_user[guild_id] = message.author.id
 
-        # record
+        # aggiorna record se necessario
         new_record = False
         if result > data["record"]:
             data["record"] = result
@@ -135,8 +134,6 @@ async def on_message(message):
         # reazione sempre per nuovo record
         if new_record:
             await message.add_reaction("🏆")
-
-            # messaggio solo se multiplo di 10
             if result % 10 == 0:
                 await message.channel.send(f"🏆 Nuovo record: **{result}**!")
 
@@ -154,22 +151,31 @@ async def on_message(message):
     save_data()
     await bot.process_commands(message)
 
-
 # ================= SLASH COMMANDS =================
-@bot.tree.command(name="setcounting", description="Imposta questo canale come counting")
+@bot.tree.command(
+    name="setcounting",
+    description="Imposta questo canale come counting",
+    guild=discord.Object(id=GUILD_ID)
+)
 @app_commands.checks.has_permissions(administrator=True)
 async def setcounting(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
+
+    # crea o aggiorna la voce del server
     guild_data[guild_id] = {
-        "current": 0,
-        "record": 0,
-        "channel": interaction.channel.id,
+        "current": guild_data.get(guild_id, {}).get("current", 0),
+        "record": guild_data.get(guild_id, {}).get("record", 0),
+        "channel": interaction.channel.id
     }
+
     save_data()
     await interaction.response.send_message("✅ Canale counting impostato!")
 
-
-@bot.tree.command(name="count", description="Mostra il numero attuale")
+@bot.tree.command(
+    name="count",
+    description="Mostra il numero attuale",
+    guild=discord.Object(id=GUILD_ID)
+)
 async def count(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
     if guild_id not in guild_data:
@@ -182,8 +188,11 @@ async def count(interaction: discord.Interaction):
         f"🔢 Numero attuale: **{guild_data[guild_id]['current']}**"
     )
 
-
-@bot.tree.command(name="record", description="Mostra il record del server")
+@bot.tree.command(
+    name="record",
+    description="Mostra il record del server",
+    guild=discord.Object(id=GUILD_ID)
+)
 async def record(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
     if guild_id not in guild_data:
@@ -196,8 +205,11 @@ async def record(interaction: discord.Interaction):
         f"🏆 Record massimo: **{guild_data[guild_id]['record']}**"
     )
 
-
-@bot.tree.command(name="reset", description="Resetta il counting")
+@bot.tree.command(
+    name="reset",
+    description="Resetta il counting",
+    guild=discord.Object(id=GUILD_ID)
+)
 @app_commands.checks.has_permissions(administrator=True)
 async def reset(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
@@ -206,8 +218,5 @@ async def reset(interaction: discord.Interaction):
     save_data()
     await interaction.response.send_message("🔄 Counting resettato!")
 
-
 # ================= AVVIO =================
-
 bot.run(TOKEN)
-
