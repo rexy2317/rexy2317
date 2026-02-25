@@ -129,7 +129,9 @@ async def on_message(message):
         # record
         if result > data["record"]:
             data["record"] = result
-            await message.channel.send(f"🏆 Nuovo record: **{result}**!")
+            await message.add_reaction("🏆")
+            if result % 10 == 0:
+                await message.channel.send(f"🏆 Nuovo record: **{result}**!")
 
         await message.add_reaction("✅")
 
@@ -199,4 +201,5 @@ async def reset(interaction: discord.Interaction):
 
 
 # ================= AVVIO =================
+
 bot.run(TOKEN)
