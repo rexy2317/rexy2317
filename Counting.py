@@ -10,7 +10,7 @@ import math
 TOKEN = os.environ.get("DISCORD_TOKEN")
 DATA_FILE = "counting_data.json"
 
-# ================= GESTIONE DATI (JSON) =================
+# ================= GESTIONE DATI =================
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
         try:
@@ -20,8 +20,7 @@ if os.path.exists(DATA_FILE):
 else:
     guild_data = {}
 
-# Memoria temporanea per l'ultimo utente (si resetta a None se c'è un errore)
-last_user = {} 
+last_user = {}  # ultimo utente che ha contato per server
 
 def save_data():
     """Salva i dati correnti nel file JSON."""
@@ -33,7 +32,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ================= CALCOLATORE MATEMATICO SICURO =================
+# ================= CALCOLATORE SICURO =================
 operators = {
     ast.Add: operator.add, ast.Sub: operator.sub, 
     ast.Mult: operator.mul, ast.Div: operator.truediv, 
@@ -50,9 +49,6 @@ def eval_expr(expr):
         if isinstance(node, ast.Constant): 
             return node.value
         elif isinstance(node, ast.BinOp):
-            if isinstance(node.op, ast.Pow):
-                exponent = _eval(node.right)
-                if exponent > 100: raise ValueError("Esponente troppo alto")
             return operators[type(node.op)](_eval(node.left), _eval(node.right))
         elif isinstance(node, ast.UnaryOp):
             return operators[type(node.op)](_eval(node.operand))
@@ -62,196 +58,181 @@ def eval_expr(expr):
         raise ValueError("Operazione non permessa")
     return _eval(ast.parse(expr, mode="eval").body)
 
-# ================= LOGICA DI GIOCO (EVENTO MESSAGGIO) =================
+# ================= EVENTI =================
 @bot.event
 async def on_ready():
     print(f"✅ Bot Counting Online come {bot.user}")
 
 @bot.event
 async def on_message(message):
-    # Ignora bot e messaggi privati
-    if message.author.bot or not message.guild: return
-
-    guild_id = str(message.guild.id)
-    
-    # Inizializza dati se il server è nuovo
-    if guild_id not in guild_data:
-        guild_data[guild_id] = {"current": 0, "record": 0, "channel": None, "user_counts": {}}
-    
-    data = guild_data[guild_id]
-    
-    # Controlla se il messaggio è nel canale dedicato
-    if not data.get("channel") or message.channel.id != data["channel"]: 
+    if message.author.bot or not message.guild: 
         return
 
-    # Tenta di leggere il contenuto come numero o operazione
+    guild_id = str(message.guild.id)
+    if guild_id not in guild_data:
+        guild_data[guild_id] = {
+            "current": 0, "record": 0, "channel": None,
+            "user_counts": {}, "user_errors": {},
+            "user_streak": {}, "user_maxcombo": {}
+        }
+
+    data = guild_data[guild_id]
+
+    if not data.get("channel") or message.channel.id != data["channel"]:
+        return
+
     try:
-        clean_content = message.content.replace(" ", "").replace(",", ".")
-        result = int(round(eval_expr(clean_content)))
+        result = int(round(eval_expr(message.content.replace(" ", ""))))
     except:
-        return # Se non è un numero, il bot ignora il messaggio senza rispondere
+        return
 
     expected = data["current"] + 1
 
-    # --- CONTROLLO ERRORI ---
+    # ---------- ERRORE ----------
     if result != expected:
-        # Errore nel numero: Reset
-        await message.channel.send(f"💥 Errore! {message.author.mention} ha scritto **{result}** invece di **{expected}**.\nSi riparte da **1**!")
+        await message.channel.send(f"💥 {message.author.mention} ha scritto **{result}**, doveva essere **{expected}**. Reset a 1!")
         data["current"] = 0
-        last_user[guild_id] = None # Reset memoria ultimo utente
+        last_user[guild_id] = None
+
+        # Incrementa errori utente
+        uid = str(message.author.id)
+        data["user_errors"][uid] = data["user_errors"].get(uid,0)+1
+        # Reset streak
+        data["user_streak"][uid] = 0
+
         try: await message.add_reaction("❌")
         except: pass
-    
+
+    # ---------- DOPPIO MESSAGGIO ----------
     elif last_user.get(guild_id) == message.author.id:
-        # Lo stesso utente ha scritto due volte di fila: Reset
-        await message.channel.send(f"❌ {message.author.mention}, non puoi contare due volte di fila! Reset a **1**.")
+        await message.channel.send(f"❌ {message.author.mention}, non puoi contare due volte di fila! Reset a 1.")
         data["current"] = 0
-        last_user[guild_id] = None # Reset memoria ultimo utente
+        last_user[guild_id] = None
+
+        uid = str(message.author.id)
+        data["user_errors"][uid] = data["user_errors"].get(uid,0)+1
+        data["user_streak"][uid] = 0
         try: await message.add_reaction("⚠️")
         except: pass
-    
+
+    # ---------- NUMERO CORRETTO ----------
     else:
-        # --- NUMERO CORRETTO ---
         data["current"] = result
-        last_user[guild_id] = message.author.id # Registra l'ultimo utente
-        
+        last_user[guild_id] = message.author.id
+
         uid = str(message.author.id)
-        data["user_counts"][uid] = data["user_counts"].get(uid, 0) + 1
-        
+        data["user_counts"][uid] = data["user_counts"].get(uid,0)+1
+        data["user_streak"][uid] = data["user_streak"].get(uid,0)+1
+
+        # Aggiorna combo massima
+        data["user_maxcombo"][uid] = max(data["user_streak"][uid], data["user_maxcombo"].get(uid,0))
+
         try: await message.add_reaction("✅")
         except: pass
-        
-        # Gestione Record
+
+        # Nuovo record globale
         if result > data["record"]:
             data["record"] = result
             try: await message.add_reaction("🏆")
             except: pass
             if result % 10 == 0:
-                await message.channel.send(f"🎉 Nuovo Record del Server! Raggiunto quota **{result}**!")
+                await message.channel.send(f"🎉 Nuovo Record Server: **{result}**!")
 
     save_data()
+    await bot.process_commands(message)
 
 # ================= COMANDI SLASH =================
-
-@bot.slash_command(name="setcounting", description="Imposta il canale attuale per il gioco")
+@bot.slash_command(name="setcounting", description="Imposta il canale attuale per il counting")
 async def setcounting(ctx):
     guild_id = str(ctx.guild.id)
-    if guild_id not in guild_data:
-        guild_data[guild_id] = {"current": 0, "record": 0, "user_counts": {}}
+    guild_data.setdefault(guild_id, {"current":0,"record":0,"channel":None,"user_counts":{}, "user_errors":{}, "user_streak":{}, "user_maxcombo":{}})
     guild_data[guild_id]["channel"] = ctx.channel.id
     save_data()
     await ctx.respond(f"✅ Canale {ctx.channel.mention} configurato per il Counting!")
 
 @bot.slash_command(name="count", description="Mostra il numero attuale")
 async def count(ctx):
-    data = guild_data.get(str(ctx.guild.id), {"current": 0})
-    await ctx.respond(f"🔢 Numero attuale: **{data['current']}**. Prossimo numero: **{data['current'] + 1}**")
+    data = guild_data.get(str(ctx.guild.id), {"current":0})
+    await ctx.respond(f"🔢 Numero attuale: **{data['current']}**. Prossimo: **{data['current']+1}**")
 
-@bot.slash_command(name="top10", description="Mostra i migliori 10 utenti del server")
+@bot.slash_command(name="record", description="Mostra il record del server")
+async def record(ctx):
+    data = guild_data.get(str(ctx.guild.id), {"record":0})
+    await ctx.respond(f"🏆 Record massimo: **{data['record']}**")
+
+@bot.slash_command(name="top10", description="Mostra i top 10 utenti")
 async def top10(ctx):
-    data = guild_data.get(str(ctx.guild.id))
-    if not data or not data.get("user_counts"):
-        return await ctx.respond("📭 Nessun dato disponibile.")
-    
-    sorted_users = sorted(data["user_counts"].items(), key=lambda x: x[1], reverse=True)[:10]
+    data = guild_data.get(str(ctx.guild.id), {"user_counts":{}})
+    sorted_users = sorted(data["user_counts"].items(), key=lambda x:x[1], reverse=True)[:10]
     description = ""
-    for i, (user_id, count) in enumerate(sorted_users, 1):
-        description += f"**{i}.** <@{user_id}> — `{count}` punti\n"
-    
-    embed = discord.Embed(title="🏆 Classifica Counting", description=description, color=0x3498db)
-    await ctx.respond(embed=embed)
-    
-@bot.slash_command(name="top10errors", description="Mostra i peggiori 10 utenti del server")
-async def toperrors(ctx):
-    data = guild_data.get(str(ctx.guild.id))
-    # Controlla se ci sono dati o se qualcuno ha mai sbagliato
-    if not data or not data.get("user_errors"):
-        return await ctx.respond("😇 Che bravi! Nessuno ha ancora commesso errori.")
-    
-    # Ordina gli utenti dal numero di errori più alto a quello più basso
-    sorted_losers = sorted(data["user_errors"].items(), key=lambda x: x[1], reverse=True)[:10]
-    
-    description = ""
-    for i, (u_id, count) in enumerate(sorted_losers, 1):
-        # Aggiunge la posizione, la menzione dell'utente e il numero di errori
-        description += f"**{i}.** <@{u_id}> — `{count}` fallimenti 🤡\n"
-    
-    embed = discord.Embed(
-        title="🤡 Classifica Pagliacci", 
-        description=description, 
-        color=0xe74c3c # Rosso per indicare l'errore
-    )
+    for i,(uid,count) in enumerate(sorted_users,1):
+        description += f"**{i}.** <@{uid}> — `{count}` punti\n"
+    embed = discord.Embed(title="🏆 Top 10 Counting", description=description, color=0x3498db)
     await ctx.respond(embed=embed)
 
-@bot.slash_command(name="resetall", description="Resetta tutto (corrente, record e punti) - Solo Counting Admin")
-async def resetall(ctx: discord.ApplicationContext):
-    role_name = "Counting Admin" 
-    if not isinstance(ctx.author, discord.Member) or not any(role.name == role_name for role in ctx.author.roles):
-        await ctx.respond(f"❌ Errore: Devi avere il ruolo `{role_name}`.", ephemeral=True)
-        return
+@bot.slash_command(name="top10errors", description="Mostra i top 10 errori")
+async def top10errors(ctx):
+    data = guild_data.get(str(ctx.guild.id), {"user_errors":{}})
+    sorted_users = sorted(data["user_errors"].items(), key=lambda x:x[1], reverse=True)[:10]
+    if not sorted_users:
+        return await ctx.respond("😇 Nessun errore registrato.")
+    description = ""
+    for i,(uid,count) in enumerate(sorted_users,1):
+        description += f"**{i}.** <@{uid}> — `{count}` errori\n"
+    embed = discord.Embed(title="🤡 Top 10 Errori", description=description, color=0xe74c3c)
+    await ctx.respond(embed=embed)
+
+@bot.slash_command(name="stats", description="Mostra le statistiche di un utente")
+async def stats(ctx, member: discord.Member):
+    guild_id = str(ctx.guild.id)
+    uid = str(member.id)
+    data = guild_data.get(guild_id, {})
+    streak = data.get("user_streak",{}).get(uid,0)
+    maxcombo = data.get("user_maxcombo",{}).get(uid,0)
+    errors = data.get("user_errors",{}).get(uid,0)
+
+    # Posizione nella classifica
+    counts = data.get("user_counts",{})
+    sorted_users = sorted(counts.items(), key=lambda x:x[1], reverse=True)
+    position = next((i+1 for i,(u,c) in enumerate(sorted_users) if u==uid), "-")
+
+    embed = discord.Embed(title=f"📊 Statistiche {member.display_name}", color=0x00ff00)
+    embed.add_field(name="👑 Streak attuale", value=str(streak), inline=True)
+    embed.add_field(name="🔥 Combo max senza errori", value=str(maxcombo), inline=True)
+    embed.add_field(name="❌ Errori totali", value=str(errors), inline=True)
+    embed.add_field(name="🥇 Posizione classifica", value=str(position), inline=True)
+    await ctx.respond(embed=embed)
+
+@bot.slash_command(name="resetall", description="Reset totale (corrente, record e punti) - Solo Counting Admin")
+async def resetall(ctx):
+    role_name = "Counting Admin"
+    if not any(role.name==role_name for role in ctx.author.roles):
+        return await ctx.respond(f"❌ Devi avere il ruolo `{role_name}`.", ephemeral=True)
 
     guild_id = str(ctx.guild.id)
     if guild_id in guild_data:
-        guild_data[guild_id]["current"] = 0
-        guild_data[guild_id]["record"] = 0
-        guild_data[guild_id]["user_counts"] = {}
-        last_user[guild_id] = None # Fondamentale per far ripartire chiunque
+        guild_data[guild_id]["current"]=0
+        guild_data[guild_id]["record"]=0
+        guild_data[guild_id]["user_counts"]={}
+        guild_data[guild_id]["user_errors"]={}
+        guild_data[guild_id]["user_streak"]={}
+        guild_data[guild_id]["user_maxcombo"]={}
+        last_user[guild_id]=None
         save_data()
-        await ctx.respond("🔄 **Reset Totale!** Il gioco ricomincia da zero per tutti.")
-    else:
-        await ctx.respond("⚠️ Errore: Dati non trovati.", ephemeral=True)
+        await ctx.respond("🔄 Reset Totale effettuato!")
 
-@bot.slash_command(name="info", description="Mostra informazioni sui comandi del bot di counting")
-async def info(ctx: discord.ApplicationContext):
-    embed = discord.Embed(
-        title="ℹ️ Info Bot Counting",
-        description="Questo bot ti permette di giocare al counting in questo server. Ecco i comandi disponibili e le regole principali:",
-        color=0x00ff00
-    )
-
-    embed.add_field(
-        name="✅ /setcounting",
-        value="Imposta il canale corrente come canale di counting. Solo qui i numeri saranno validi.",
-        inline=False
-    )
-    embed.add_field(
-        name="🔢 /count",
-        value="Mostra il numero corrente da contare.",
-        inline=False
-    )
-    embed.add_field(
-        name="🏆 /record",
-        value="Mostra il record massimo raggiunto nel counting di questo server.",
-        inline=False
-    )
-    embed.add_field(
-        name="🔄 /reset",
-        value="Resetta il counting a 0. Utile in caso di errori o per ricominciare.",
-        inline=False
-    )
-    embed.add_field(
-        name="🥇 /top10",
-        value="Mostra la classifica dei primi 10 utenti con più conteggi validi.",
-        inline=False
-    )
-    embed.add_field(
-        name="🤡 /top10errors",
-        value="Mostra la classifica dei primi 10 utenti con più errori validi.",
-        inline=False
-    )
-    embed.add_field(
-        name="📜 Regole principali",
-        value="- I numeri devono essere inviati in ordine crescente, partendo da 1.\n"
-              "- Non puoi contare due volte di seguito.\n"
-              "- Puoi usare espressioni matematiche semplici (es: `2+1`, `sqrt(9)`).",
-        inline=False
-    )
-
+@bot.slash_command(name="info", description="Mostra info sul bot")
+async def info(ctx):
+    embed = discord.Embed(title="ℹ️ Info Bot Counting", description="Comandi disponibili:", color=0x00ff00)
+    embed.add_field(name="✅ /setcounting", value="Imposta il canale per il counting", inline=False)
+    embed.add_field(name="🔢 /count", value="Mostra il numero attuale", inline=False)
+    embed.add_field(name="🏆 /record", value="Mostra il record del server", inline=False)
+    embed.add_field(name="🔄 /resetall", value="Reset totale (admin)", inline=False)
+    embed.add_field(name="🥇 /top10", value="Top 10 utenti con più conteggi", inline=False)
+    embed.add_field(name="🤡 /top10errors", value="Top 10 utenti con più errori", inline=False)
+    embed.add_field(name="📊 /stats @utente", value="Mostra statistiche di un utente", inline=False)
+    embed.add_field(name="📜 Regole principali", value="- Numeri in ordine crescente\n- Non puoi contare due volte di seguito\n- Puoi usare semplici espressioni matematiche", inline=False)
     await ctx.respond(embed=embed)
 
-
-# ================= AVVIO BOT =================
+# ================= AVVIO =================
 bot.run(TOKEN)
-
-
-
