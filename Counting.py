@@ -111,7 +111,8 @@ async def on_message(message):
             )
             data["current"] = 0
             last_user[guild_id] = None
-            await message.add_reaction("💥")
+            try: await message.add_reaction("💥")
+            except: pass
             save_data()
             return
 
@@ -120,19 +121,30 @@ async def on_message(message):
         last_user[guild_id] = message.author.id
         data["user_counts"][str(message.author.id)] = data["user_counts"].get(str(message.author.id),0)+1
 
-        # Reazioni
-        await message.add_reaction("✅")  # ✅ per ogni numero corretto
+        # ✅ sempre per numero corretto
+        try: await message.add_reaction("✅")
+        except: pass
+
+        # Se nuovo record
         if result > data["record"]:
             data["record"] = result
-            await message.add_reaction("🏆")  # 🏆 nuovo record
+            try: await message.add_reaction("🏆")
+            except: pass
 
-        # Messaggio speciale per multipli di 10
-        if result % 10 == 0:
-            await message.channel.send(f"🎉 Wow! Il counting ha raggiunto **{result}**! È un nuovo record! 🏆🎉")
+            # Messaggio speciale per multipli di 10 SOLO SE NUOVO RECORD
+            if result % 10 == 0:
+                await message.channel.send(f"🎉 Wow! Il counting ha raggiunto **{result}**! È un nuovo record! 🎉")
+
+            # Animazione emoji per milestone importanti
+            milestones = [50, 100, 200, 500, 1000]
+            if result in milestones:
+                anim = "🎈🎉✨🥳🎊"
+                await message.channel.send(f"🌟 **GRANDE TRAGUARDO! {result} numeri!** {anim}")
 
     else:
         # Numero sbagliato
-        await message.add_reaction("❌")
+        try: await message.add_reaction("❌")
+        except: pass
         await message.channel.send(f"💥 Sbagliato! Era **{expected}**.\nSi riparte da **1**.")
         data["current"] = 0
         last_user[guild_id] = None
@@ -239,6 +251,27 @@ async def info(ctx: discord.ApplicationContext):
     )
 
     await ctx.respond(embed=embed)
+
+# ================= COMANDO RESET COMPLETO =================
+@bot.slash_command(name="resetall", description="Resetta tutto il counting, incluso il record e le statistiche (solo ruolo admin)")
+async def resetall(ctx: discord.ApplicationContext):
+    role_name = "Counting Admin"  # cambia con il ruolo desiderato
+    if not any(role.name == role_name for role in ctx.author.roles):
+        await ctx.respond("❌ Non hai il permesso di usare questo comando.", ephemeral=True)
+        return
+
+    guild_id = str(ctx.guild.id)
+    data = guild_data.get(guild_id)
+    if not data:
+        await ctx.respond("⚠️ Counting non configurato.", ephemeral=True)
+        return
+
+    data["current"] = 0
+    data["record"] = 0
+    data["user_counts"] = {}
+    last_user[guild_id] = None
+    save_data()
+    await ctx.respond("🔄 Tutto resettato! Numero corrente, record e statistiche utenti azzerati!")
 
 # ================= AVVIO =================
 bot.run(TOKEN)
