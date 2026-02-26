@@ -8,7 +8,7 @@ import math
 
 # ================= CONFIG =================
 TOKEN = os.environ.get("DISCORD_TOKEN")
-if TOKEN is None:
+if not TOKEN:
     raise ValueError("Token non trovato nelle variabili ambiente!")
 
 DATA_FILE = "/mnt/data/counting_data.json"
@@ -56,8 +56,8 @@ allowed_funcs = {
 
 def eval_expr(expr):
     def _eval(node):
-        if isinstance(node, ast.Num):
-            return node.n
+        if isinstance(node, ast.Constant):
+            return node.value
         elif isinstance(node, ast.BinOp):
             if type(node.op) not in operators:
                 raise ValueError("Operatore non permesso")
@@ -70,16 +70,14 @@ def eval_expr(expr):
             return allowed_funcs[func_name](*args)
         else:
             raise ValueError("Espressione non valida")
-    
     node = ast.parse(expr, mode="eval").body
     return _eval(node)
 
 # ================= EVENTI =================
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
     print(f"✅ Bot connesso come {bot.user}")
-    print("Slash commands sincronizzati globalmente.")
+    print("Slash commands Py-Cord pronti.")
 
 @bot.event
 async def on_message(message):
@@ -88,34 +86,24 @@ async def on_message(message):
 
     guild_id = str(message.guild.id)
 
-    # se server nuovo, inizializza i dati
     if guild_id not in guild_data:
-        guild_data[guild_id] = {
-            "current": 0,
-            "record": 0,
-            "channel": None,
-            "user_counts": {}
-        }
+        guild_data[guild_id] = {"current":0,"record":0,"channel":None,"user_counts":{}}
         save_data()
 
     data = guild_data[guild_id]
 
-    # se il canale non è impostato o non è quello corretto, ignoriamo
     if not data["channel"] or message.channel.id != data["channel"]:
         return
 
-    # prova a calcolare numero/calcolo
     try:
         result = eval_expr(message.content.replace(" ", ""))
         result = int(result)
     except Exception:
-        return  # messaggio non valido → ignorato
+        return
 
     expected = data["current"] + 1
 
-    # ===== NUMERO CORRETTO =====
     if result == expected:
-        # blocco doppio turno
         if last_user.get(guild_id) == message.author.id:
             await message.channel.send(
                 f"❌ {message.author.mention} non puoi contare due volte! Reset."
@@ -127,41 +115,33 @@ async def on_message(message):
 
         data["current"] = result
         last_user[guild_id] = message.author.id
+        data["user_counts"][str(message.author.id)] = data["user_counts"].get(str(message.author.id),0)+1
 
-        # aggiorna contributo utente
-        data["user_counts"][str(message.author.id)] = data["user_counts"].get(str(message.author.id), 0) + 1
-
-        # aggiorna record
         if result > data["record"]:
             data["record"] = result
             await message.add_reaction("🏆")
 
         await message.add_reaction("✅")
-
-    # ===== ERRORE =====
     else:
         await message.add_reaction("❌")
-        await message.channel.send(
-            f"💥 Sbagliato! Era **{expected}**.\nSi riparte da **1**."
-        )
+        await message.channel.send(f"💥 Sbagliato! Era **{expected}**.\nSi riparte da **1**.")
         data["current"] = 0
         last_user[guild_id] = None
 
     save_data()
     await bot.process_commands(message)
 
-# ================= COMANDI SLASH =================
-@bot.tree.command(name="setcounting", description="Imposta questo canale come counting")
+# ================= SLASH COMMANDS PY-CORD =================
+@bot.slash_command(name="setcounting", description="Imposta questo canale come counting")
 async def setcounting(ctx: discord.ApplicationContext):
     guild_id = str(ctx.guild.id)
     data = guild_data.get(guild_id, {"current":0,"record":0,"user_counts":{}})
-
     data["channel"] = ctx.channel.id
     guild_data[guild_id] = data
     save_data()
     await ctx.respond("✅ Canale counting impostato!")
 
-@bot.tree.command(name="count", description="Mostra il numero attuale")
+@bot.slash_command(name="count", description="Mostra il numero attuale")
 async def count(ctx: discord.ApplicationContext):
     guild_id = str(ctx.guild.id)
     data = guild_data.get(guild_id)
@@ -170,7 +150,7 @@ async def count(ctx: discord.ApplicationContext):
         return
     await ctx.respond(f"🔢 Numero attuale: **{data['current']}**")
 
-@bot.tree.command(name="record", description="Mostra il record del server")
+@bot.slash_command(name="record", description="Mostra il record del server")
 async def record(ctx: discord.ApplicationContext):
     guild_id = str(ctx.guild.id)
     data = guild_data.get(guild_id)
@@ -179,7 +159,7 @@ async def record(ctx: discord.ApplicationContext):
         return
     await ctx.respond(f"🏆 Record massimo: **{data['record']}**")
 
-@bot.tree.command(name="reset", description="Resetta il counting")
+@bot.slash_command(name="reset", description="Resetta il counting")
 async def reset(ctx: discord.ApplicationContext):
     guild_id = str(ctx.guild.id)
     data = guild_data.get(guild_id)
@@ -191,22 +171,23 @@ async def reset(ctx: discord.ApplicationContext):
     save_data()
     await ctx.respond("🔄 Counting resettato!")
 
-@bot.tree.command(name="top10", description="Mostra i primi 10 utenti per contributi")
+@bot.slash_command(name="top10", description="Mostra i primi 10 utenti per contributi")
 async def top10(ctx: discord.ApplicationContext):
     guild_id = str(ctx.guild.id)
     data = guild_data.get(guild_id)
     if not data or not data.get("user_counts"):
-        await ctx.respond("⚠️ Nessun contributo ancora registrato.", ephemeral=True)
+        await ctx.respond("⚠️ Nessun contributo registrato.", ephemeral=True)
         return
 
     sorted_users = sorted(data["user_counts"].items(), key=lambda x: x[1], reverse=True)[:10]
     description = ""
     for i, (user_id, count) in enumerate(sorted_users, start=1):
-        user = ctx.guild.get_member(int(user_id))
-        name = user.display_name if user else f"Utente {user_id}"
+        member = ctx.guild.get_member(int(user_id))
+        name = member.display_name if member else f"Utente {user_id}"
         description += f"**{i}. {name}** — {count} punti\n"
 
     await ctx.respond(f"🏆 **Classifica Counting**\n{description}")
 
 # ================= AVVIO =================
 bot.run(TOKEN)
+
