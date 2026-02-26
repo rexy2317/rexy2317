@@ -234,7 +234,7 @@ async def info(ctx: discord.ApplicationContext):
         value="Mostra la classifica dei primi 10 utenti con più conteggi validi.",
         inline=False
     )
-     embed.add_field(
+    embed.add_field(
         name="🤡 /top10errors",
         value="Mostra la classifica dei primi 10 utenti con più errori validi.",
         inline=False
@@ -252,5 +252,6 @@ async def info(ctx: discord.ApplicationContext):
 
 # ================= AVVIO BOT =================
 bot.run(TOKEN)
+
 
 
