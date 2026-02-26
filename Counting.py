@@ -179,12 +179,50 @@ async def resetall(ctx: discord.ApplicationContext):
     else:
         await ctx.respond("⚠️ Errore: Dati non trovati.", ephemeral=True)
 
-@bot.slash_command(name="info", description="Mostra regole e comandi")
-async def info(ctx):
-    embed = discord.Embed(title="ℹ️ Guida al Counting", color=0x2ecc71)
-    embed.add_field(name="📜 Regole", value="- Non contare due volte di fila.\n- Se sbagli, si ricomincia da 1.\n- Puoi usare calcoli come `2+2` o `sqrt(16)`.", inline=False)
-    embed.add_field(name="🛠️ Admin", value="Gli utenti con ruolo `Counting Admin` possono usare `/resetall`.", inline=False)
+@bot.slash_command(name="info", description="Mostra informazioni sui comandi del bot di counting")
+async def info(ctx: discord.ApplicationContext):
+    embed = discord.Embed(
+        title="ℹ️ Info Bot Counting",
+        description="Questo bot ti permette di giocare al counting in questo server. Ecco i comandi disponibili e le regole principali:",
+        color=0x00ff00
+    )
+
+    embed.add_field(
+        name="✅ /setcounting",
+        value="Imposta il canale corrente come canale di counting. Solo qui i numeri saranno validi.",
+        inline=False
+    )
+    embed.add_field(
+        name="🔢 /count",
+        value="Mostra il numero corrente da contare.",
+        inline=False
+    )
+    embed.add_field(
+        name="🏆 /record",
+        value="Mostra il record massimo raggiunto nel counting di questo server.",
+        inline=False
+    )
+    embed.add_field(
+        name="🔄 /reset",
+        value="Resetta il counting a 0. Utile in caso di errori o per ricominciare.",
+        inline=False
+    )
+    embed.add_field(
+        name="🥇 /top10",
+        value="Mostra la classifica dei primi 10 utenti con più conteggi validi.",
+        inline=False
+    )
+    embed.add_field(
+        name="📜 Regole principali",
+        value="- I numeri devono essere inviati in ordine crescente, partendo da 1.\n"
+              "- Non puoi contare due volte di seguito.\n"
+              "- Puoi usare espressioni matematiche semplici (es: `2+1`, `sqrt(9)`).",
+        inline=False
+    )
+
     await ctx.respond(embed=embed)
+
 
 # ================= AVVIO BOT =================
 bot.run(TOKEN)
+
