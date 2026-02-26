@@ -128,7 +128,7 @@ async def on_message(message):
 
         # Messaggio speciale per multipli di 10
         if result % 10 == 0:
-            await message.channel.send(f"🎉 Wow! Il counting ha raggiunto **{result}**! Continua così! 🎉")
+            await message.channel.send(f"🎉 Wow! Il counting ha raggiunto **{result}**! È un nuovo record! 🏆🎉")
 
     else:
         # Numero sbagliato
@@ -242,3 +242,4 @@ async def info(ctx: discord.ApplicationContext):
 
 # ================= AVVIO =================
 bot.run(TOKEN)
+
