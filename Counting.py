@@ -160,6 +160,28 @@ async def top10(ctx):
     
     embed = discord.Embed(title="🏆 Classifica Counting", description=description, color=0x3498db)
     await ctx.respond(embed=embed)
+    
+@bot.slash_command(name="top10errors", description="Mostra i peggiori 10 utenti del server")
+async def toperrors(ctx):
+    data = guild_data.get(str(ctx.guild.id))
+    # Controlla se ci sono dati o se qualcuno ha mai sbagliato
+    if not data or not data.get("user_errors"):
+        return await ctx.respond("😇 Che bravi! Nessuno ha ancora commesso errori.")
+    
+    # Ordina gli utenti dal numero di errori più alto a quello più basso
+    sorted_losers = sorted(data["user_errors"].items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    description = ""
+    for i, (u_id, count) in enumerate(sorted_losers, 1):
+        # Aggiunge la posizione, la menzione dell'utente e il numero di errori
+        description += f"**{i}.** <@{u_id}> — `{count}` fallimenti 🤡\n"
+    
+    embed = discord.Embed(
+        title="🤡 Classifica Pagliacci", 
+        description=description, 
+        color=0xe74c3c # Rosso per indicare l'errore
+    )
+    await ctx.respond(embed=embed)
 
 @bot.slash_command(name="resetall", description="Resetta tutto (corrente, record e punti) - Solo Counting Admin")
 async def resetall(ctx: discord.ApplicationContext):
@@ -212,6 +234,11 @@ async def info(ctx: discord.ApplicationContext):
         value="Mostra la classifica dei primi 10 utenti con più conteggi validi.",
         inline=False
     )
+     embed.add_field(
+        name="🤡 /top10errors",
+        value="Mostra la classifica dei primi 10 utenti con più errori validi.",
+        inline=False
+    )
     embed.add_field(
         name="📜 Regole principali",
         value="- I numeri devono essere inviati in ordine crescente, partendo da 1.\n"
@@ -225,4 +252,5 @@ async def info(ctx: discord.ApplicationContext):
 
 # ================= AVVIO BOT =================
 bot.run(TOKEN)
+
 
