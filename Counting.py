@@ -190,10 +190,10 @@ async def stats(ctx, member: discord.Member):
     position = next((i+1 for i,(u,_) in enumerate(sorted_users) if u==uid), "N/A")
     await ctx.respond(embed=discord.Embed(
         title=f"📊 Stats di {member.display_name}",
-        description=f"👑 Streak personale: `{streak}`\n"
+        description=f"🥇 Posizione in classifica: `{position}`\n"
                     f"🔥 Combo senza errori: `{combo}`\n"
                     f"❌ Errori totali: `{errors}`\n"
-                    f"🥇 Posizione in classifica: `{position}`",
+                    f"👑 Streak personale: `{streak}`",
         color=0x00ff00
     ))
 
@@ -216,15 +216,16 @@ async def info(ctx):
         description="Comandi disponibili e regole principali:",
         color=0x00ff00
     )
-    embed.add_field("✅ /setcounting","Imposta il canale per il counting.",inline=False)
-    embed.add_field("🔢 /count","Mostra il numero corrente.",inline=False)
-    embed.add_field("🏆 /record","Mostra il record massimo.",inline=False)
-    embed.add_field("🔄 /resetall","Resetta tutto (solo Counting Admin).",inline=False)
-    embed.add_field("🥇 /top10","Mostra i migliori 10 utenti.",inline=False)
-    embed.add_field("🤡 /top10errors","Mostra i peggiori 10 utenti.",inline=False)
-    embed.add_field("📊 /stats @utente","Mostra streak, combo, errori e posizione.",inline=False)
-    embed.add_field("📜 Regole","- I numeri devono essere inviati in ordine crescente.\n- Non puoi contare due volte di seguito.\n- Puoi usare espressioni matematiche semplici (es: 2+1, sqrt(9)).",inline=False)
+    embed.add_field(name="✅ /setcounting", value="Imposta il canale per il counting.", inline=False)
+    embed.add_field(name="🔢 /count", value="Mostra il numero corrente.", inline=False)
+    embed.add_field(name="🏆 /record", value="Mostra il record massimo.", inline=False)
+    embed.add_field(name="🔄 /resetall", value="Resetta tutto (solo Counting Admin).", inline=False)
+    embed.add_field(name="🥇 /top10", value="Mostra i migliori 10 utenti.", inline=False)
+    embed.add_field(name="🤡 /top10errors", value="Mostra i peggiori 10 utenti.", inline=False)
+    embed.add_field(name="📊 /stats @utente", value="Mostra streak, combo, errori e posizione.", inline=False)
+    embed.add_field(name="📜 Regole",value="- I numeri devono essere inviati in ordine crescente.\n- Non puoi contare due volte di seguito.\n- Puoi usare espressioni matematiche semplici (es: 2+1, sqrt(9)).",inline=False)
     await ctx.respond(embed=embed)
-
+    
 # ================= AVVIO BOT =================
 bot.run(TOKEN)
+
